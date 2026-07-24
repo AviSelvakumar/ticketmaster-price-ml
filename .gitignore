@@ -83,7 +83,7 @@ celerybeat-schedule
 
 # Environments
 .env
-.venv
+.venv/
 env/
 venv/
 ENV/
@@ -103,5 +103,11 @@ venv.bak/
 # mypy
 .mypy_cache/
 
+# generated model artifacts
+model.pkl
+model_plots.pdf
+
 # api keys
 settings.py
+.vercel
+_uv/

@@ -1,5 +1,7 @@
-library(glmnet); library(car)
-shows = read.csv("/Users/ryanrawitscher/Desktop/ticketmaster-price-ml/mintry.csv")
+library(glmnet)
+.libPaths(Sys.getenv("R_LIBS_USER"))
+# library(car) # not available on this machine (Rcpp/Deriv build failure); vif(fit) below is skipped
+shows = read.csv("mintry.csv")
 head(shows)
 row.names(shows) = shows$X
 shows$X=NULL
@@ -19,7 +21,7 @@ plot(fit, which=1, pch=16, cex=.8)
 yhat = predict(fit, shows[!train,])
 mean((shows$minprice[!train] - yhat)^2)      # compute test set MSE as 296.3087
 summary(fit)
-vif(fit)
+# vif(fit) # requires car package, not available on this machine
 
 # stepwise model
 fit2 = step(fit)
@@ -47,7 +49,7 @@ mean((shows$minprice[!train] - yhatlasso)^2)       # compute test set MSE as 300
 # Transformations
 plot(shows[train,-1,-7], pch=16, cex=.5)
 par(mfrow=c(1,1))
-for(i in 3:7){
+for(i in 3:5){
   plot(shows[,i], shows$minprice, pch=16, cex=.5, main=names(shows)[i])
   lines(smooth.spline(shows[,i], shows$minprice, df=2),)
 } 
@@ -57,7 +59,7 @@ plot(minprice ~ log(score), shows, pch=16)
 # forward stepwise model
 fit= lm(minprice ~ 1, shows, subset=train)
 fit2 = step(fit, scope=~weekend+pop+score+genre+month)
-plot(fit2, pch=16, cex=.5)
+tryCatch(plot(fit2, pch=16, cex=.5), error=function(e) message("skipped diagnostic plot: ", e$message))
 yhat = predict(fit2, shows[!train,])
 mean((shows$minprice[!train] - yhat)^2) #MSE=296.5095
 
@@ -65,14 +67,14 @@ mean((shows$minprice[!train] - yhat)^2) #MSE=296.5095
 # forward stepwise GAM model
 library(gam)
 fit= gam(minprice ~ 1, data=shows, subset=train)
-fit2 = step.gam(fit, scope=list("Weekend"=~1+weekend,
+fit2 = step.Gam(fit, scope=list("Weekend"=~1+weekend,
                                 "Population"=~1+pop+s(pop),
                                 "Genre"=~1+genre,
                                 "Artist Score"=~1+score+s(score),
                                 "Month"=~1+month+s(month)
 ))
 summary(fit2)
-plot(fit2, ask=T, se=T)
+plot(fit2, ask=F, se=T)
 yhat = predict(fit2, shows[!train,])
 mean((shows$minprice[!train] - yhat)^2) #MSE is 283.8466
 plot(fit2$fitted.values, fit2$residuals, pch=16, cex=.7)
@@ -121,7 +123,8 @@ mean((shows$minprice[!train] - fit$test$predicted)^2) # 215.9549
 
 # boosted tree
 library(gbm)
-fit = gbm(minprice ~ ., data=shows[train,], interaction.depth=2, n.trees=500)
+shows$genre = as.factor(shows$genre)
+fit = gbm(minprice ~ weekend+pop+score+genre+month, data=shows[train,], interaction.depth=2, n.trees=500)
 yhat = predict(fit, newdata=shows[!train,], n.trees=500)
 mean((shows$minprice[!train] - yhat)^2) # 289.4104
 
