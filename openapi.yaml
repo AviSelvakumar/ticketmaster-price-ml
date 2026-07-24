@@ -1,0 +1,192 @@
+openapi: 3.0.3
+info:
+  title: Ticketmaster Minimum Price Predictor API
+  description: >
+    Predicts the minimum ticket price for a concert based on artist
+    popularity, genre, venue-market population, and timing. Backed by a
+    random forest regressor trained on historical Ticketmaster listings
+    (see `pricepredictor.R` and `train_model.py` for the full model
+    comparison and training pipeline).
+  version: "1.0.0"
+servers:
+  - url: /
+    description: Current host
+tags:
+  - name: Predictions
+  - name: Meta
+paths:
+  /health:
+    get:
+      tags: [Meta]
+      summary: Liveness check
+      operationId: health
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /genres:
+    get:
+      tags: [Meta]
+      summary: List genres the model was trained on
+      description: >
+        Genres outside this list are still accepted by `/predict` (they're
+        treated as an "unknown genre" with no genre-specific signal) but
+        won't match any of the model's learned genre effects.
+      operationId: listGenres
+      responses:
+        "200":
+          description: Known genres
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  genres:
+                    type: array
+                    items:
+                      type: string
+                    example:
+                      - Rock
+                      - Hip-Hop/Rap
+                      - Country
+                      - R&B
+                      - Metal
+                      - Pop
+                      - Dance/Electronic
+                      - Undefined
+                      - Comedy
+                      - Other
+                      - Folk
+                      - Family
+                      - World
+                      - Religious
+                      - Classical
+  /predict:
+    post:
+      tags: [Predictions]
+      summary: Predict minimum ticket price
+      description: >
+        Accepts a single show or a list of shows and returns the predicted
+        minimum ticket price for each.
+      operationId: predict
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/ShowInput"
+                - type: array
+                  items:
+                    $ref: "#/components/schemas/ShowInput"
+            examples:
+              single:
+                summary: Single show
+                value:
+                  weekend: 1
+                  pop: 447841
+                  score: 100
+                  month: 6
+                  genre: Hip-Hop/Rap
+              batch:
+                summary: Batch of shows
+                value:
+                  - weekend: 0
+                    pop: 76817
+                    score: 73
+                    month: 8
+                    genre: Country
+                  - weekend: 1
+                    pop: 39551
+                    score: 88
+                    month: 7
+                    genre: Rock
+      responses:
+        "200":
+          description: Prediction(s)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    oneOf:
+                      - $ref: "#/components/schemas/ShowPrediction"
+                      - type: array
+                        items:
+                          $ref: "#/components/schemas/ShowPrediction"
+              examples:
+                single:
+                  summary: Single show response
+                  value:
+                    results:
+                      weekend: 1
+                      pop: 447841
+                      score: 100
+                      month: 6
+                      genre: Hip-Hop/Rap
+                      predicted_minprice: 124.2
+        "400":
+          description: Invalid or incomplete input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                missingField:
+                  value:
+                    error: "record 0: missing fields: ['genre']"
+components:
+  schemas:
+    ShowInput:
+      type: object
+      required: [weekend, pop, score, month, genre]
+      properties:
+        weekend:
+          type: integer
+          enum: [0, 1]
+          description: 1 if the show is on a Friday/Saturday/Sunday, else 0
+          example: 1
+        pop:
+          type: integer
+          description: Population of the venue's metro area
+          example: 447841
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Artist popularity score (0-100)
+          example: 100
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: Calendar month of the show
+          example: 6
+        genre:
+          type: string
+          description: >
+            Genre of the show. See `/genres` for the genres the model was
+            trained on; other values are accepted but treated as unknown.
+          example: Hip-Hop/Rap
+    ShowPrediction:
+      allOf:
+        - $ref: "#/components/schemas/ShowInput"
+        - type: object
+          properties:
+            predicted_minprice:
+              type: number
+              description: Predicted minimum ticket price, in USD
+              example: 124.2
+    Error:
+      type: object
+      properties:
+        error:
+          type: string

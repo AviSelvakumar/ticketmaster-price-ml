@@ -1,17 +1,29 @@
-"""Flask API for the minprice predictor.
+"""Flask API for the minprice predictor -- local/full-stack version.
+
+Named local_app.py (not app.py) deliberately: Vercel's Flask framework
+detection treats a root-level app.py as THE serverless entrypoint,
+overriding vercel.json's rewrite to api/index.py. That caused production
+to import this file (which needs joblib/pandas/scikit-learn) even though
+the deployed requirements.txt only installs Flask -- see api/index.py for
+the dependency-free version that's actually meant to be deployed.
 
 Run:
-    python app.py
+    python local_app.py
 
 Endpoints:
     GET  /health           liveness check
     GET  /genres           genres the model was trained on
     POST /predict          predict minprice for one record or a list of records
+    GET  /docs             ReDoc-rendered API documentation
+    GET  /openapi.yaml     OpenAPI spec backing /docs
 """
-from flask import Flask, jsonify, request
+from pathlib import Path
+
+from flask import Flask, jsonify, request, send_from_directory
 import joblib
 import pandas as pd
 
+BASE_DIR = Path(__file__).resolve().parent
 MODEL_PATH = "model.pkl"
 REQUIRED_FIELDS = {"weekend", "pop", "score", "month", "genre"}
 KNOWN_GENRES = [
@@ -48,6 +60,16 @@ def health():
 @app.get("/genres")
 def genres():
     return jsonify(genres=KNOWN_GENRES)
+
+
+@app.get("/docs")
+def docs():
+    return send_from_directory(BASE_DIR / "static", "docs.html")
+
+
+@app.get("/openapi.yaml")
+def openapi_spec():
+    return send_from_directory(BASE_DIR, "openapi.yaml", mimetype="application/yaml")
 
 
 @app.post("/predict")

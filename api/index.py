@@ -9,10 +9,16 @@ function limit.
 
 Regenerate ml_model.py by running train_model.py then export_model.py.
 """
-from flask import Flask, jsonify, request
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from flask import Flask, jsonify, request, send_from_directory
 
 from ml_model import score
 
+BASE_DIR = Path(__file__).resolve().parent.parent
 REQUIRED_FIELDS = {"weekend", "pop", "score", "month", "genre"}
 
 # Order matches the OneHotEncoder's alphabetically-sorted categories_ used
@@ -62,6 +68,16 @@ def health():
 @app.get("/genres")
 def genres():
     return jsonify(genres=GENRES)
+
+
+@app.get("/docs")
+def docs():
+    return send_from_directory(BASE_DIR / "static", "docs.html")
+
+
+@app.get("/openapi.yaml")
+def openapi_spec():
+    return send_from_directory(BASE_DIR, "openapi.yaml", mimetype="application/yaml")
 
 
 @app.post("/predict")
